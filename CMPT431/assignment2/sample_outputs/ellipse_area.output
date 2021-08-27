@@ -1,0 +1,18 @@
+Number of points : 1000000000
+Number of threads : 8
+Major Radius : 2
+Minor Radius : 1
+Random Seed : 1
+thread_id, points_generated, ellipse_points, time_taken
+0, 125000000, 98173836, 5.8106
+1, 125000000, 98173836, 5.7907
+2, 125000000, 98173836, 5.7592
+3, 125000000, 98173836, 5.8109
+4, 125000000, 98173836, 5.8195
+5, 125000000, 98173836, 5.8008
+6, 125000000, 98173836, 5.7979
+7, 125000000, 98173836, 5.8238
+Total points generated : 1000000000
+Total points in ellipse : 785390688
+Result : 6.283125504
+Time taken (in seconds) : 5.8279

@@ -1,0 +1,24 @@
+mpirun -n 4 ./heat_transfer_parallel --iCX 0.1 --iCY 0.15 --tSteps 4000 --gSize 1000 --mTemp 600
+Number of processes : 4
+Grid Size : 1000x1000
+Cx : 0.1
+Cy : 0.15
+Temperature in the middle of grid : 600
+Time Steps : 4000
+Initializing Temperature Array...
+thread_id, start_column, end_column, time_taken
+0, 0, 249, 14.199
+1, 250, 499, 14.198
+2, 500, 749, 14.196
+3, 750, 999, 14.198
+Temp[0,0]=0
+Temp[200,200]=4.0357e-08
+Temp[249,249]=0.006173
+Temp[400,400]=578.09
+Temp[499,499]=600
+Temp[600,600]=576.43
+Temp[749,749]=0.0075003
+Temp[800,800]=3.0101e-08
+Temp[999,999]=0
+Time taken (in seconds) : 14.219
+

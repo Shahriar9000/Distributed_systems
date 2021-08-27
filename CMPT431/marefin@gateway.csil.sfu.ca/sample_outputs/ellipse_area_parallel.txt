@@ -1,0 +1,16 @@
+mpirun -n 4 ./ellipse_area_parallel --majorRad 2.5 --minorRad 1.4 --nPoints 1000000000 --rSeed 45
+Number of processes : 4
+Number of points : 1000000000
+Major Radius : 2.500000
+Minor Radius : 1.400000
+Random Seed: 45
+rank, points_generated, ellipse_points, time_taken
+0, 250000000, 196348834, 11.683
+1, 250000000, 196348934, 11.756
+2, 250000000, 196350039, 11.604
+3, 250000000, 196349841, 11.641
+Total points generated : 1000000000
+Total points in ellipse : 785397648
+Result : 10.995566884747
+Time taken (in seconds) : 11.756
+

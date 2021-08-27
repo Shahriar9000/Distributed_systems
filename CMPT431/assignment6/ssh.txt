@@ -1,0 +1,5 @@
+ssh -p 24 marefin@gateway.csil.sfu.ca
+ssh -p 24 marefin@cs-cloud.cs.surrey.sfu.ca
+
+scp -P 24 assignment6/ellipse_area_parallel.cpp marefin@gateway.csil.sfu.ca:
+scp -P 24 ellipse_area_parallel.cpp  marefin@cs-cloud.cs.surrey.sfu.ca:/home/marefin/

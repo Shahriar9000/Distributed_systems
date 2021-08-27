@@ -1,0 +1,214 @@
+#include "core/graph.h"
+#include "core/utils.h"
+#include <iomanip>
+#include <iostream>
+#include <stdlib.h>
+#include <thread>
+
+#ifdef USE_INT
+#define INIT_PAGE_RANK 100000
+#define EPSILON 1000
+#define PAGE_RANK(x) (15000 + (5 * x) / 6)
+#define CHANGE_IN_PAGE_RANK(x, y) std::abs(x - y)
+typedef int64_t PageRankType;
+#else
+#define INIT_PAGE_RANK 1.0
+#define EPSILON 0.01
+#define DAMPING 0.85
+#define PAGE_RANK(x) (1 - DAMPING + DAMPING * x)
+#define CHANGE_IN_PAGE_RANK(x, y) std::fabs(x - y)
+typedef double PageRankType;
+#endif
+
+using namespace std;
+//thread shared
+struct thread_data{
+    int t_id;
+    Graph *g;
+    uint iterStart;
+    uint iterEnd;
+    uint tid;
+    uintV n;
+    double thread_time;
+    PageRankType *pr_next;
+    PageRankType *pr_curr;
+    pthread_mutex_t* mutex;
+    CustomBarrier* my_barrier;
+};
+
+struct thread_data* thread_args;
+pthread_t* thread_list;
+
+void page_rank_push(uint t_id, Graph *g, uint iterStart, uint iterEnd, uint n, PageRankType *pr_next, PageRankType *pr_curr, pthread_mutex_t* mutex, CustomBarrier* my_barrier){
+
+  timer thread_timer;
+  thread_timer.start();
+
+  for (uintV u = iterStart; u < iterEnd; u++)
+  {
+      uintE out_degree = g->vertices_[u].getOutDegree();
+      for (uintE i = 0; i < out_degree; i++)
+      {
+        uintV v = g->vertices_[u].getOutNeighbor(i);
+        pthread_mutex_lock(mutex);
+        pr_next[v] += (pr_curr[u] / out_degree);
+        pthread_mutex_unlock(mutex);
+      }
+  }
+  my_barrier->wait();
+  for (uintV v = iterStart; v < iterEnd; v++)
+  {
+      pthread_mutex_lock(mutex);
+      pr_next[v] = PAGE_RANK(pr_next[v]);
+      pthread_mutex_unlock(mutex);
+      // reset pr_curr for the next iteration
+      pr_curr[v] = pr_next[v];
+      pr_next[v] = 0.0;
+  }
+  thread_args[t_id].thread_time += thread_timer.stop();
+}
+
+void* thread_function (void* arg_){
+
+    struct thread_data* t_args;
+    t_args = (struct thread_data*) arg_;
+
+    page_rank_push(t_args->t_id , t_args->g, t_args->iterStart, t_args->iterEnd, t_args->n, t_args->pr_next, t_args->pr_curr, t_args->mutex, t_args->my_barrier);
+
+    //exit threads
+    pthread_exit(NULL);
+}
+
+
+void pageRankParallel(Graph &g, int max_iters, uint n_threads, CustomBarrier &barrier_, thread_data* thread_args, pthread_t* threads_list) {
+  uintV n = g.n_;
+  int last_thread = n_threads -1;
+  PageRankType *pr_curr = new PageRankType[n];
+  PageRankType *pr_next = new PageRankType[n];
+  uint start;
+  uint end;
+  for (uintV i = 0; i < n; i++) {
+    pr_curr[i] = INIT_PAGE_RANK;
+    pr_next[i] = 0.0;
+  }
+  //create mutex
+  pthread_mutex_t mutex;
+  pthread_mutex_init(&mutex, NULL);
+  // Push based pagerank
+  timer t1;
+  double time_taken = 0.0;
+  // Create threads and distribute the work across T threads
+  // -------------------------------------------------------------------
+  t1.start();
+  int rc;
+  for(int i =0; i< n_threads; i++){
+    thread_args[i].thread_time = 0.0;
+    thread_args[i].n = n;
+    thread_args[i].mutex = &mutex;
+    thread_args[i].g = &g;
+    thread_args[i].pr_next = pr_next;
+    thread_args[i].pr_curr = pr_curr;
+    thread_args[i].my_barrier = &barrier_;
+  }
+
+  for (int iter = 0; iter < max_iters; iter++)
+  {
+    // for each vertex 'u', process all its outNeighbors 'v'
+    for (int i = 0; i< n_threads; i++)
+    {
+      if (i==last_thread){
+        start = n/n_threads*(last_thread);
+        end = n;
+      }
+      else{
+        start = (n/n_threads)*i;
+        end = ((i+1)*(n/n_threads));
+      }
+      thread_args[i].t_id = i;
+      thread_args[i].iterStart = start;
+      thread_args[i].iterEnd = end;
+
+      rc = pthread_create(&threads_list[i], NULL, thread_function, (void*) &thread_args[i]);
+      if (rc)
+      {
+            cout << "Error creating thread" << i << "error:" << rc << endl;
+      }
+    }
+
+    for (int i = 0; i< n_threads; i++)
+    {
+      rc = pthread_join(threads_list[i], NULL);
+      if (rc)
+      {
+            cout << "Error joining thread" << i << "error:" << rc << endl;
+      }
+    }
+  }
+  time_taken = t1.stop();
+  // -------------------------------------------------------------------
+  std::cout << "thread_id, time_taken" << std::endl;
+  for(uint i = 0; i < n_threads; i++)
+  {
+    std::cout << thread_args[i].t_id << ", " << std::setprecision(TIME_PRECISION) << thread_args[i].thread_time <<"\n";
+  }
+  // Print the above statistics for each thread
+  // Example output for 2 threads:
+  // thread_id, time_taken
+  // 0, 0.12
+  // 1, 0.12
+
+  PageRankType sum_of_page_ranks = 0;
+  for (uintV u = 0; u < n; u++) {
+    sum_of_page_ranks += pr_curr[u];
+  }
+  std::cout << "Sum of page ranks : " << sum_of_page_ranks << "\n";
+  std::cout << "Time taken (in seconds) : " << time_taken << "\n";
+  pthread_mutex_destroy(&mutex);
+  delete[] pr_curr;
+  delete[] pr_next;
+}
+
+int main(int argc, char *argv[]) {
+  cxxopts::Options options(
+      "page_rank_push",
+      "Calculate page_rank using serial and parallel execution");
+  options.add_options(
+      "",
+      {
+          {"nThreads", "Number of Threads",
+           cxxopts::value<uint>()->default_value(DEFAULT_NUMBER_OF_THREADS)},
+          {"nIterations", "Maximum number of iterations",
+           cxxopts::value<uint>()->default_value(DEFAULT_MAX_ITER)},
+          {"inputFile", "Input graph file path",
+           cxxopts::value<std::string>()->default_value(
+               "/scratch/input_graphs/roadNet-CA")},
+      });
+
+  auto cl_options = options.parse(argc, argv);
+  uint n_threads = cl_options["nThreads"].as<uint>();
+  uint max_iterations = cl_options["nIterations"].as<uint>();
+  std::string input_file_path = cl_options["inputFile"].as<std::string>();
+
+#ifdef USE_INT
+  std::cout << "Using INT" << std::endl;
+#else
+  std::cout << "Using DOUBLE" << std::endl;
+#endif
+  std::cout << std::fixed;
+  std::cout << "Number of Threads : " << n_threads << std::endl;
+  std::cout << "Number of Iterations: " << max_iterations << std::endl;
+
+  Graph g;
+  std::cout << "Reading graph\n";
+  g.readGraphFromBinary<int>(input_file_path);
+  std::cout << "Created graph\n";
+
+  thread_args = new thread_data[n_threads];
+  thread_list = new pthread_t[n_threads];
+  CustomBarrier barrier_(n_threads);
+  pageRankParallel(g, max_iterations, n_threads, barrier_, thread_args, thread_list);
+
+  delete[] thread_args;
+  delete[] thread_list;
+  return 0;
+}
